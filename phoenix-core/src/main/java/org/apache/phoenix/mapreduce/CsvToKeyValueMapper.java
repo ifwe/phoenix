@@ -33,6 +33,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -120,6 +121,9 @@ public class CsvToKeyValueMapper extends Mapper<LongWritable,Text,ImmutableBytes
     @SuppressWarnings("deprecation")
     @Override
     protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+        Configuration conf = context.getConfiguration();
+        byte[] currentSCN = getCurrentSCN(conf);
+
         ImmutableBytesWritable outputKey = new ImmutableBytesWritable();
         try {
             CSVRecord csvRecord = null;
@@ -141,7 +145,12 @@ public class CsvToKeyValueMapper extends Mapper<LongWritable,Text,ImmutableBytes
                 Pair<byte[], List<KeyValue>> kvPair = uncommittedDataIterator.next();
                 List<KeyValue> keyValueList = kvPair.getSecond();
                 keyValueList = preUpdateProcessor.preUpsert(kvPair.getFirst(), keyValueList);
+
                 for (KeyValue kv : keyValueList) {
+                    if (null != currentSCN) {
+                        kv.updateLatestStamp(currentSCN);
+                    }
+
                     outputKey.set(kv.getBuffer(), kv.getRowOffset(), kv.getRowLength());
                     context.write(outputKey, kv);
                 }
@@ -190,6 +199,21 @@ public class CsvToKeyValueMapper extends Mapper<LongWritable,Text,ImmutableBytes
             throw new IllegalStateException(HConstants.ZOOKEEPER_QUORUM + " is not configured");
         }
         return PhoenixRuntime.JDBC_PROTOCOL + PhoenixRuntime.JDBC_PROTOCOL_SEPARATOR + zkQuorum;
+    }
+
+    /**
+     * Gets the currentSCN option and casts it to a Long
+     * (No need to catch numberFormatException because it's done before it's set)
+     *
+     * @return the HBase version timestamp as a Long
+     */
+    @VisibleForTesting
+    static byte[] getCurrentSCN(Configuration conf) {
+        String currentSCN = conf.get("CurrentSCN");
+        if (null == currentSCN) {
+            return null;
+        }
+        return Bytes.toBytes(Long.parseLong(currentSCN));
     }
 
     @VisibleForTesting

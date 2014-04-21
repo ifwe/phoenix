@@ -79,6 +79,7 @@ public class CsvBulkLoadTool extends Configured implements Tool {
     static final Option ARRAY_DELIMITER_OPT = new Option("a", "array-delimiter", true, "Array element delimiter (optional)");
     static final Option IMPORT_COLUMNS_OPT = new Option("c", "import-columns", true, "Comma-separated list of columns to be imported");
     static final Option IGNORE_ERRORS_OPT = new Option("g", "ignore-errors", false, "Ignore input errors");
+    static final Option CURRENT_SCN_OPT = new Option("V", "scn", true, "HBase version timestamp");
     static final Option HELP_OPT = new Option("h", "help", false, "Show this help and quit");
 
     public static void main(String[] args) throws Exception {
@@ -137,6 +138,7 @@ public class CsvBulkLoadTool extends Configured implements Tool {
         options.addOption(ARRAY_DELIMITER_OPT);
         options.addOption(IMPORT_COLUMNS_OPT);
         options.addOption(IGNORE_ERRORS_OPT);
+        options.addOption(CURRENT_SCN_OPT);
         options.addOption(HELP_OPT);
         return options;
     }
@@ -303,6 +305,18 @@ public class CsvBulkLoadTool extends Configured implements Tool {
             String zkQuorum = cmdLine.getOptionValue(ZK_QUORUM_OPT.getOpt());
             LOG.info("Configuring ZK quorum to {}", zkQuorum);
             conf.set(HConstants.ZOOKEEPER_QUORUM, zkQuorum);
+        }
+
+        if (cmdLine.hasOption(CURRENT_SCN_OPT.getOpt())) {
+            String sCurrentSCN = cmdLine.getOptionValue(CURRENT_SCN_OPT.getOpt());
+            try {
+                Long currentSCN = Long.parseLong(sCurrentSCN);
+            }
+            catch (NumberFormatException e) {
+                throw new IllegalArgumentException("HBase version timestamp: " + sCurrentSCN);
+            }
+            LOG.info("Setting HBase version timestamp to {}", sCurrentSCN);
+            conf.set("CurrentSCN", sCurrentSCN);
         }
 
         CsvBulkImportUtil.initCsvImportJob(
