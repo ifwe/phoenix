@@ -302,7 +302,7 @@ public class CsvToKeyValueMapper extends Mapper<LongWritable,Text,ImmutableBytes
         private final CSVFormat csvFormat;
 
         CsvLineParser(char fieldDelimiter) {
-            this.csvFormat = CSVFormat.newFormat(fieldDelimiter);
+            this.csvFormat = CSVFormat.MYSQL;
         }
 
         public CSVRecord parse(String input) throws IOException {
