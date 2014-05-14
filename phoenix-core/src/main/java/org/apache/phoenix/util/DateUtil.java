@@ -88,7 +88,7 @@ public class DateUtil {
     private static ThreadLocal<Format> dateFormat =
             new ThreadLocal < Format > () {
         @Override protected Format initialValue() {
-            return getDateParser(DEFAULT_DATE_FORMAT);
+            return getDateParser(DEFAULT_MS_DATE_FORMAT);
         }
     };
 
