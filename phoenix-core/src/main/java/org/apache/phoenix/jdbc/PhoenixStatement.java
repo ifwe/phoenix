@@ -31,11 +31,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
 
-import com.google.common.base.Throwables;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Lists;
 import org.apache.hadoop.hbase.util.Pair;
 import org.apache.phoenix.compile.ColumnProjector;
 import org.apache.phoenix.compile.ColumnResolver;
@@ -56,7 +52,6 @@ import org.apache.phoenix.compile.RowProjector;
 import org.apache.phoenix.compile.StatementContext;
 import org.apache.phoenix.compile.StatementNormalizer;
 import org.apache.phoenix.compile.StatementPlan;
-import org.apache.phoenix.compile.SubselectRewriter;
 import org.apache.phoenix.compile.UpsertCompiler;
 import org.apache.phoenix.coprocessor.MetaDataProtocol;
 import org.apache.phoenix.exception.BatchUpdateExecution;
@@ -113,10 +108,12 @@ import org.apache.phoenix.schema.tuple.SingleKeyValueTuple;
 import org.apache.phoenix.schema.tuple.Tuple;
 import org.apache.phoenix.util.ByteUtil;
 import org.apache.phoenix.util.KeyValueUtil;
-import org.apache.phoenix.util.PhoenixContextExecutor;
 import org.apache.phoenix.util.SQLCloseable;
 import org.apache.phoenix.util.SQLCloseables;
 import org.apache.phoenix.util.ServerUtil;
+
+import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Lists;
 
 
 /**
@@ -197,81 +194,58 @@ public class PhoenixStatement implements Statement, SQLCloseable, org.apache.pho
         return connection.getQueryServices().getOptimizer().optimize(this, plan);
     }
     
-    protected PhoenixResultSet executeQuery(final CompilableStatement stmt) throws SQLException {
+    protected PhoenixResultSet executeQuery(CompilableStatement stmt) throws SQLException {
         try {
-            return PhoenixContextExecutor.call(new Callable<PhoenixResultSet>() {
-                @Override
-                public PhoenixResultSet call() throws Exception {
-                    try {
-                        QueryPlan plan = stmt.compilePlan(PhoenixStatement.this);
-                        plan = connection.getQueryServices().getOptimizer().optimize(
-                                PhoenixStatement.this, plan);
-                        plan.getContext().getSequenceManager().validateSequences(stmt.getSequenceAction());
-                        PhoenixResultSet rs = newResultSet(plan.iterator(), plan.getProjector());
-                        resultSets.add(rs);
-                        setLastQueryPlan(plan);
-                        setLastResultSet(rs);
-                        setLastUpdateCount(NO_UPDATE);
-                        setLastUpdateOperation(stmt.getOperation());
-                        return rs;
-                    } catch (RuntimeException e) {
-                        // FIXME: Expression.evaluate does not throw SQLException
-                        // so this will unwrap throws from that.
-                        if (e.getCause() instanceof SQLException) {
-                            throw (SQLException) e.getCause();
-                        }
-                        throw e;
-                    }
-                }
-            });
-        } catch (Exception e) {
-            Throwables.propagateIfInstanceOf(e, SQLException.class);
-            throw Throwables.propagate(e);
+            QueryPlan plan = stmt.compilePlan(this);
+            plan = connection.getQueryServices().getOptimizer().optimize(this, plan);
+            plan.getContext().getSequenceManager().validateSequences(stmt.getSequenceAction());;
+            PhoenixResultSet rs = newResultSet(plan.iterator(), plan.getProjector());
+            resultSets.add(rs);
+            setLastQueryPlan(plan);
+            setLastResultSet(rs);
+            setLastUpdateCount(NO_UPDATE);
+            setLastUpdateOperation(stmt.getOperation());
+            return rs;
+        } catch (RuntimeException e) {
+            // FIXME: Expression.evaluate does not throw SQLException
+            // so this will unwrap throws from that.
+            if (e.getCause() instanceof SQLException) {
+                throw (SQLException) e.getCause();
+            }
+            throw e;
         }
     }
     
-    protected int executeMutation(final CompilableStatement stmt) throws SQLException {
+    protected int executeMutation(CompilableStatement stmt) throws SQLException {
+        // Note that the upsert select statements will need to commit any open transaction here,
+        // since they'd update data directly from coprocessors, and should thus operate on
+        // the latest state
         try {
-            return PhoenixContextExecutor.call(
-                    new Callable<Integer>() {
-                        @Override
-                        public Integer call() throws Exception {
-
-                            // Note that the upsert select statements will need to commit any open transaction here,
-                            // since they'd update data directly from coprocessors, and should thus operate on
-                            // the latest state
-                            try {
-                                MutationPlan plan = stmt.compilePlan(PhoenixStatement.this);
-                                plan.getContext().getSequenceManager().validateSequences(stmt.getSequenceAction());
-                                MutationState state = plan.execute();
-                                connection.getMutationState().join(state);
-                                if (connection.getAutoCommit()) {
-                                    connection.commit();
-                                }
-                                setLastResultSet(null);
-                                setLastQueryPlan(null);
-                                // Unfortunately, JDBC uses an int for update count, so we
-                                // just max out at Integer.MAX_VALUE
-                                int lastUpdateCount = (int) Math.min(Integer.MAX_VALUE, state.getUpdateCount());
-                                setLastUpdateCount(lastUpdateCount);
-                                setLastUpdateOperation(stmt.getOperation());
-                                return lastUpdateCount;
-                            } catch (RuntimeException e) {
-                                // FIXME: Expression.evaluate does not throw SQLException
-                                // so this will unwrap throws from that.
-                                if (e.getCause() instanceof SQLException) {
-                                    throw (SQLException) e.getCause();
-                                }
-                                throw e;
-                            }
-                        }
-                    });
-        } catch (Exception e) {
-            Throwables.propagateIfInstanceOf(e, SQLException.class);
-            throw Throwables.propagate(e);
+            MutationPlan plan = stmt.compilePlan(this);
+            plan.getContext().getSequenceManager().validateSequences(stmt.getSequenceAction());;
+            MutationState state = plan.execute();
+            connection.getMutationState().join(state);
+            if (connection.getAutoCommit()) {
+                connection.commit();
+            }
+            setLastResultSet(null);
+            setLastQueryPlan(null);
+            // Unfortunately, JDBC uses an int for update count, so we
+            // just max out at Integer.MAX_VALUE
+            int lastUpdateCount = (int)Math.min(Integer.MAX_VALUE, state.getUpdateCount());
+            setLastUpdateCount(lastUpdateCount);
+            setLastUpdateOperation(stmt.getOperation());
+            return lastUpdateCount;
+        } catch (RuntimeException e) {
+            // FIXME: Expression.evaluate does not throw SQLException
+            // so this will unwrap throws from that.
+            if (e.getCause() instanceof SQLException) {
+                throw (SQLException) e.getCause();
+            }
+            throw e;
         }
     }
-
+    
     protected static interface CompilableStatement extends BindableStatement {
         public <T extends StatementPlan> T compilePlan (PhoenixStatement stmt) throws SQLException;
     }
@@ -285,9 +259,8 @@ public class PhoenixStatement implements Statement, SQLCloseable, org.apache.pho
         @SuppressWarnings("unchecked")
         @Override
         public QueryPlan compilePlan(PhoenixStatement stmt) throws SQLException {
-            SelectStatement select = SubselectRewriter.flatten(this, stmt.getConnection());
-            ColumnResolver resolver = FromCompiler.getResolverForQuery(select, stmt.getConnection());
-            select = StatementNormalizer.normalize(select, resolver);
+            ColumnResolver resolver = FromCompiler.getResolverForQuery(this, stmt.getConnection());
+            SelectStatement select = StatementNormalizer.normalize(this, resolver);
             return new QueryCompiler(stmt, select, resolver).compile();
         }
     }

@@ -39,6 +39,6 @@ public abstract class TableNode {
         return alias;
     }
 
-    public abstract <T> T accept(TableNodeVisitor<T> visitor) throws SQLException;
+    public abstract void accept(TableNodeVisitor visitor) throws SQLException;
 }
 

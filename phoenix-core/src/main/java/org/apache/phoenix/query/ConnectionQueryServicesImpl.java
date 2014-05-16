@@ -60,13 +60,12 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import com.google.protobuf.HBaseZeroCopyByteString;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HRegionLocation;
@@ -154,7 +153,6 @@ import org.apache.phoenix.util.ByteUtil;
 import org.apache.phoenix.util.ConfigUtil;
 import org.apache.phoenix.util.JDBCUtil;
 import org.apache.phoenix.util.MetaDataUtil;
-import org.apache.phoenix.util.PhoenixContextExecutor;
 import org.apache.phoenix.util.PhoenixRuntime;
 import org.apache.phoenix.util.PropertiesUtil;
 import org.apache.phoenix.util.ReadOnlyProps;
@@ -164,14 +162,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Objects;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.io.Closeables;
-
+import com.google.protobuf.HBaseZeroCopyByteString;
 
 public class ConnectionQueryServicesImpl extends DelegateQueryServices implements ConnectionQueryServices {
     private static final Logger logger = LoggerFactory.getLogger(ConnectionQueryServicesImpl.class);
@@ -233,7 +230,7 @@ public class ConnectionQueryServicesImpl extends DelegateQueryServices implement
         }
         // Without making a copy of the configuration we cons up, we lose some of our properties
         // on the server side during testing.
-        this.config = HBaseFactoryProvider.getConfigurationFactory().getConfiguration(config);
+        this.config = HBaseConfiguration.create(config);
         // set replication required parameter
         ConfigUtil.setReplicationConfigIfAbsent(this.config);
         this.props = new ReadOnlyProps(this.config.iterator());
@@ -444,6 +441,7 @@ public class ConnectionQueryServicesImpl extends DelegateQueryServices implement
         }
         synchronized(latestMetaDataLock) {
             latestMetaData = latestMetaData.addTable(table);
+        	logger.info("Table " + table + " has been added into latestMetaData");
             latestMetaDataLock.notifyAll();
             return latestMetaData;
         }
@@ -1423,83 +1421,69 @@ public class ConnectionQueryServicesImpl extends DelegateQueryServices implement
     }
     
     @Override
-    public void init(final String url, final Properties props) throws SQLException {
-        try {
-            PhoenixContextExecutor.call(new Callable<Void>() {
-                @Override
-                public Void call() throws Exception {
-                    if (initialized) {
-                        if (initializationException != null) {
-                            // Throw previous initialization exception, as we won't resuse this instance
-                            throw initializationException;
-                        }
-                        return null;
-                    }
-                    synchronized (this) {
-                        if (initialized) {
-                            if (initializationException != null) {
-                                // Throw previous initialization exception, as we won't resuse this instance
-                                throw initializationException;
-                            }
-                            return null;
-                        }
-                        if (closed) {
-                            throw new SQLException("The connection to the cluster has been closed.");
-                        }
-
-                        SQLException sqlE = null;
-                        PhoenixConnection metaConnection = null;
-                        try {
-                            openConnection();
-                            Properties scnProps = PropertiesUtil.deepCopy(props);
-                            scnProps.setProperty(
-                                    PhoenixRuntime.CURRENT_SCN_ATTRIB,
-                                    Long.toString(MetaDataProtocol.MIN_SYSTEM_TABLE_TIMESTAMP));
-                            scnProps.remove(PhoenixRuntime.TENANT_ID_ATTRIB);
-                            metaConnection = new PhoenixConnection(
-                                    ConnectionQueryServicesImpl.this, url, scnProps, newEmptyMetaData());
-                            try {
-                                metaConnection.createStatement().executeUpdate(QueryConstants.CREATE_TABLE_METADATA);
-                            } catch (NewerTableAlreadyExistsException ignore) {
-                                // Ignore, as this will happen if the SYSTEM.TABLE already exists at this fixed timestamp.
-                                // A TableAlreadyExistsException is not thrown, since the table only exists *after* this fixed timestamp.
-                            }
-                            try {
-                                metaConnection.createStatement().executeUpdate(QueryConstants.CREATE_SEQUENCE_METADATA);
-                            } catch (NewerTableAlreadyExistsException ignore) {
-                                // Ignore, as this will happen if the SYSTEM.SEQUENCE already exists at this fixed timestamp.
-                                // A TableAlreadyExistsException is not thrown, since the table only exists *after* this fixed timestamp.
-                            }
-                            upgradeMetaDataTo3_0(url, props);
-                        } catch (SQLException e) {
-                            sqlE = e;
-                        } finally {
-                            try {
-                                if (metaConnection != null) metaConnection.close();
-                            } catch (SQLException e) {
-                                if (sqlE != null) {
-                                    sqlE.setNextException(e);
-                                } else {
-                                    sqlE = e;
-                                }
-                            } finally {
-                                try {
-                                    if (sqlE != null) {
-                                        initializationException = sqlE;
-                                        throw sqlE;
-                                    }
-                                } finally {
-                                    initialized = true;
-                                }
-                            }
-                        }
-                    }
-                    return null;
+    public void init(String url, Properties props) throws SQLException {
+        if (initialized) {
+            if (initializationException != null) {
+                // Throw previous initialization exception, as we won't resuse this instance
+                throw initializationException;
+            }
+            return;
+        }
+        synchronized (this) {
+            if (initialized) {
+                if (initializationException != null) {
+                    // Throw previous initialization exception, as we won't resuse this instance
+                    throw initializationException;
                 }
-            });
-        } catch (Exception e) {
-            Throwables.propagateIfInstanceOf(e, SQLException.class);
-            throw Throwables.propagate(e);
+                return;
+            }
+            if (closed) {
+                throw new SQLException("The connection to the cluster has been closed.");
+            }
+                
+            SQLException sqlE = null;
+            PhoenixConnection metaConnection = null;
+            try {
+                openConnection();
+                Properties scnProps = PropertiesUtil.deepCopy(props);
+                scnProps.setProperty(PhoenixRuntime.CURRENT_SCN_ATTRIB, Long.toString(MetaDataProtocol.MIN_SYSTEM_TABLE_TIMESTAMP));
+                scnProps.remove(PhoenixRuntime.TENANT_ID_ATTRIB);
+                metaConnection = new PhoenixConnection(this, url, scnProps, newEmptyMetaData());
+                try {
+                    metaConnection.createStatement().executeUpdate(QueryConstants.CREATE_TABLE_METADATA);
+                } catch (NewerTableAlreadyExistsException ignore) {
+                    // Ignore, as this will happen if the SYSTEM.TABLE already exists at this fixed timestamp.
+                    // A TableAlreadyExistsException is not thrown, since the table only exists *after* this fixed timestamp.
+                }
+                try {
+                    metaConnection.createStatement().executeUpdate(QueryConstants.CREATE_SEQUENCE_METADATA);
+                } catch (NewerTableAlreadyExistsException ignore) {
+                    // Ignore, as this will happen if the SYSTEM.SEQUENCE already exists at this fixed timestamp.
+                    // A TableAlreadyExistsException is not thrown, since the table only exists *after* this fixed timestamp.
+                }
+                upgradeMetaDataTo3_0(url, props);
+            } catch (SQLException e) {
+                sqlE = e;
+            } finally {
+                try {
+                    if (metaConnection != null) metaConnection.close();
+                } catch (SQLException e) {
+                    if (sqlE != null) {
+                        sqlE.setNextException(e);
+                    } else {
+                        sqlE = e;
+                    }
+                } finally {
+                    try {
+                        if (sqlE != null) {
+                            initializationException = sqlE;
+                            throw sqlE;
+                        }
+                    } finally {
+                        initialized = true;
+                    }
+                }
+            }
         }
     }
 
@@ -1522,7 +1506,7 @@ public class ConnectionQueryServicesImpl extends DelegateQueryServices implement
      * Clears the Phoenix meta data cache on each region server
      * @throws SQLException
      */
-    protected void clearCache() throws SQLException {
+    public void clearCache() throws SQLException {
         try {
             SQLException sqlE = null;
             HTableInterface htable = this.getTable(PhoenixDatabaseMetaData.SYSTEM_CATALOG_NAME_BYTES);

@@ -42,7 +42,7 @@ import org.apache.phoenix.schema.tuple.Tuple;
 import org.apache.phoenix.util.KeyValueUtil;
 import org.apache.phoenix.util.SchemaUtil;
 
-public class TupleProjector {    
+public class ScanProjector {    
     public static final byte[] VALUE_COLUMN_FAMILY = Bytes.toBytes("_v");
     public static final byte[] VALUE_COLUMN_QUALIFIER = new byte[0];
     
@@ -53,7 +53,7 @@ public class TupleProjector {
     private ValueBitSet valueSet;
     private final ImmutableBytesWritable ptr = new ImmutableBytesWritable();
     
-    public TupleProjector(ProjectedPTableWrapper projected) {
+    public ScanProjector(ProjectedPTableWrapper projected) {
     	List<PColumn> columns = projected.getTable().getColumns();
     	expressions = new Expression[columns.size() - projected.getTable().getPKColumns().size()];
     	// we do not count minNullableIndex for we might do later merge.
@@ -69,7 +69,7 @@ public class TupleProjector {
         valueSet = ValueBitSet.newInstance(schema);
     }
     
-    private TupleProjector(KeyValueSchema schema, Expression[] expressions) {
+    private ScanProjector(KeyValueSchema schema, Expression[] expressions) {
     	this.schema = schema;
     	this.expressions = expressions;
     	this.valueSet = ValueBitSet.newInstance(schema);
@@ -79,7 +79,7 @@ public class TupleProjector {
         this.valueSet = bitSet;
     }
     
-    public static void serializeProjectorIntoScan(Scan scan, TupleProjector projector) {
+    public static void serializeProjectorIntoScan(Scan scan, ScanProjector projector) {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         try {
             DataOutputStream output = new DataOutputStream(stream);
@@ -103,7 +103,7 @@ public class TupleProjector {
         
     }
     
-    public static TupleProjector deserializeProjectorFromScan(Scan scan) {
+    public static ScanProjector deserializeProjectorFromScan(Scan scan) {
         byte[] proj = scan.getAttribute(SCAN_PROJECTOR);
         if (proj == null) {
             return null;
@@ -120,7 +120,7 @@ public class TupleProjector {
             	expressions[i] = ExpressionType.values()[ordinal].newInstance();
             	expressions[i].readFields(input);
             }
-            return new TupleProjector(schema, expressions);
+            return new ScanProjector(schema, expressions);
         } catch (IOException e) {
             throw new RuntimeException(e);
         } finally {
@@ -239,4 +239,3 @@ public class TupleProjector {
         return new ProjectedValueTuple(keyPtr.get(), keyPtr.getOffset(), keyPtr.getLength(), dest.getTimestamp(), merged, destBitSetLen);
     }
 }
-

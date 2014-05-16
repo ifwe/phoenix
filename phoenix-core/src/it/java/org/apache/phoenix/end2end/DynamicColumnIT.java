@@ -104,6 +104,9 @@ public class DynamicColumnIT extends BaseClientManagedTimeIT {
         }
         // Create Phoenix table after HBase table was created through the native APIs
         // The timestamp of the table creation must be later than the timestamp of the data
+        // Sleep two second here is to avoid time clock skew among different servers when running
+        // the test against a live cluster
+        Thread.sleep(2000); 
         ensureTableCreated(getUrl(), HBASE_DYNAMIC_COLUMNS);
     }
 

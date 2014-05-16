@@ -32,7 +32,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.hadoop.hbase.HConstants;
 import org.apache.phoenix.util.QueryUtil;
+import org.junit.After;
 import org.junit.Test;
 
 public class DeleteIT extends BaseHBaseManagedTimeIT {
@@ -53,6 +55,11 @@ public class DeleteIT extends BaseHBaseManagedTimeIT {
             stmt.execute();
         }
         conn.commit();
+    }
+    
+    @After
+    public void after() throws Exception {
+      deletePriorTables(HConstants.LATEST_TIMESTAMP);
     }
 
     @Test

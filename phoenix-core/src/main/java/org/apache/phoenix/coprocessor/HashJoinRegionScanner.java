@@ -37,8 +37,8 @@ import org.apache.phoenix.cache.TenantCache;
 import org.apache.phoenix.expression.Expression;
 import org.apache.phoenix.hbase.index.util.ImmutableBytesPtr;
 import org.apache.phoenix.join.HashJoinInfo;
-import org.apache.phoenix.join.TupleProjector;
-import org.apache.phoenix.join.TupleProjector.ProjectedValueTuple;
+import org.apache.phoenix.join.ScanProjector;
+import org.apache.phoenix.join.ScanProjector.ProjectedValueTuple;
 import org.apache.phoenix.parse.JoinTableNode.JoinType;
 import org.apache.phoenix.schema.IllegalDataException;
 import org.apache.phoenix.schema.KeyValueSchema;
@@ -50,33 +50,26 @@ import org.apache.phoenix.util.TupleUtil;
 public class HashJoinRegionScanner implements RegionScanner {
     
     private final RegionScanner scanner;
-    private final TupleProjector projector;
+    private final ScanProjector projector;
     private final HashJoinInfo joinInfo;
     private Queue<Tuple> resultQueue;
     private boolean hasMore;
-    private long count;
-    private long limit;
     private HashCache[] hashCaches;
     private List<Tuple>[] tempTuples;
     private ValueBitSet tempDestBitSet;
     private ValueBitSet[] tempSrcBitSet;
     
     @SuppressWarnings("unchecked")
-    public HashJoinRegionScanner(RegionScanner scanner, TupleProjector projector, HashJoinInfo joinInfo, ImmutableBytesWritable tenantId, RegionCoprocessorEnvironment env) throws IOException {
+    public HashJoinRegionScanner(RegionScanner scanner, ScanProjector projector, HashJoinInfo joinInfo, ImmutableBytesWritable tenantId, RegionCoprocessorEnvironment env) throws IOException {
         this.scanner = scanner;
         this.projector = projector;
         this.joinInfo = joinInfo;
         this.resultQueue = new LinkedList<Tuple>();
         this.hasMore = true;
-        this.count = 0;
-        this.limit = Long.MAX_VALUE;
         if (joinInfo != null) {
             for (JoinType type : joinInfo.getJoinTypes()) {
                 if (type != JoinType.Inner && type != JoinType.Left)
                     throw new DoNotRetryIOException("Got join type '" + type + "'. Expect only INNER or LEFT with hash-joins.");
-            }
-            if (joinInfo.getLimit() != null) {
-                this.limit = joinInfo.getLimit();
             }
             int count = joinInfo.getJoinIds().length;
             this.tempTuples = new List[count];
@@ -100,20 +93,17 @@ public class HashJoinRegionScanner implements RegionScanner {
         }
     }
     
-    private void processResults(List<Cell> result, boolean hasBatchLimit) throws IOException {
+    private void processResults(List<Cell> result, boolean hasLimit) throws IOException {
         if (result.isEmpty())
             return;
         
         Tuple tuple = new ResultTuple(Result.create(result));
-        if (joinInfo == null || joinInfo.forceProjection()) {
-            tuple = projector.projectResults(tuple);
-        }
         if (joinInfo == null) {
-            resultQueue.offer(tuple);
+            resultQueue.offer(projector.projectResults(tuple));
             return;
         }
         
-        if (hasBatchLimit)
+        if (hasLimit)
             throw new UnsupportedOperationException("Cannot support join operations in scans with limit");
 
         int count = joinInfo.getJoinIds().length;
@@ -140,10 +130,7 @@ public class HashJoinRegionScanner implements RegionScanner {
                 }
             } else {
                 KeyValueSchema schema = joinInfo.getJoinedSchema();
-                if (!joinInfo.forceProjection()) {
-                    tuple = projector.projectResults(tuple);
-                }
-                resultQueue.offer(tuple);
+                resultQueue.offer(projector.projectResults(tuple));
                 for (int i = 0; i < count; i++) {
                     boolean earlyEvaluation = joinInfo.earlyEvaluation()[i];
                     if (earlyEvaluation && tempTuples[i] == null)
@@ -163,7 +150,7 @@ public class HashJoinRegionScanner implements RegionScanner {
                         }
                         for (Tuple t : tempTuples[i]) {
                             Tuple joined = tempSrcBitSet[i] == ValueBitSet.EMPTY_VALUE_BITSET ?
-                                    lhs : TupleProjector.mergeProjectedValue(
+                                    lhs : ScanProjector.mergeProjectedValue(
                                             (ProjectedValueTuple) lhs, schema, tempDestBitSet,
                                             t, joinInfo.getSchemas()[i], tempSrcBitSet[i], 
                                             joinInfo.getFieldPositions()[i]);
@@ -211,7 +198,7 @@ public class HashJoinRegionScanner implements RegionScanner {
         for (int i = 0; i < tuple.size(); i++) {
             results.add(tuple.getValue(i));
         }
-        return (count++ < limit) && (resultQueue.isEmpty() ? hasMore : true);
+        return resultQueue.isEmpty() ? hasMore : true;
     }
 
     @Override

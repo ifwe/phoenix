@@ -287,6 +287,23 @@ public class MetaDataEndpointImpl extends MetaDataProtocol implements Coprocesso
     public void start(CoprocessorEnvironment env) throws IOException {
         if (env instanceof RegionCoprocessorEnvironment) {
             this.env = (RegionCoprocessorEnvironment) env;
+            HRegion region = this.env.getRegion();
+            if(region != null && region.getTableDesc() != null && 
+                Bytes.compareTo(region.getTableDesc().getName(), 
+                  PhoenixDatabaseMetaData.SYSTEM_CATALOG_NAME_BYTES) == 0) {
+                  // sleep a little bit to compensate time clock skew when SYSTEM.CATALOG moves 
+                  // among region servers because we relies on server time of RS which is hosting
+                  // SYSTEM.CATALOG
+                  long sleepTime = this.env.getConfiguration().
+                      getLong("phoenix.clock.skew.interval", 1000);
+                  try {
+                      if(sleepTime > 0) {
+                          Thread.sleep(sleepTime);
+                      }
+                  } catch (InterruptedException ie) {
+                      Thread.currentThread().interrupt();
+                  }
+            }
         } else {
             throw new CoprocessorException("Must be loaded on a table region!");
         }
@@ -700,6 +717,7 @@ public class MetaDataEndpointImpl extends MetaDataProtocol implements Coprocesso
         HRegion region = env.getRegion();
         Cache<ImmutableBytesPtr,PTable> metaDataCache = GlobalCache.getInstance(this.env).getMetaDataCache();
         PTable table = metaDataCache.getIfPresent(cacheKey);
+
         // We always cache the latest version - fault in if not in cache
         if (table != null || (table = buildTable(key, cacheKey, region, asOfTimeStamp)) != null) {
             return table;

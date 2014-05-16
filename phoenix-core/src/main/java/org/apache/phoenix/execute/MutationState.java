@@ -311,6 +311,8 @@ public class MutationState implements SQLCloseable {
     private static void logMutationSize(HTableInterface htable, List<Mutation> mutations) {
         long byteSize = 0;
         int keyValueCount = 0;
+        long minTimeStamp = Long.MAX_VALUE;
+        long maxTimeStamp = Long.MIN_VALUE;
         for (Mutation mutation : mutations) {
             if (mutation.getFamilyCellMap() != null) { // Not a Delete of the row
                 for (Entry<byte[], List<Cell>> entry : mutation.getFamilyCellMap().entrySet()) {
@@ -318,12 +320,21 @@ public class MutationState implements SQLCloseable {
                         for (Cell kv : entry.getValue()) {
                             byteSize += CellUtil.estimatedSizeOf(kv);
                             keyValueCount++;
+                            long cellTimeStamp = kv.getTimestamp();
+                            if(minTimeStamp > cellTimeStamp) {
+                                minTimeStamp = cellTimeStamp;
+                            }
+                            if(maxTimeStamp < cellTimeStamp) {
+                                maxTimeStamp = cellTimeStamp;
+                            }
                         }
                     }
                 }
             }
         }
-        logger.debug("Sending " + mutations.size() + " mutations for " + Bytes.toString(htable.getTableName()) + " with " + keyValueCount + " key values of total size " + byteSize + " bytes");
+       
+        logger.debug("Sending " + mutations.size() + " mutations for " + Bytes.toString(htable.getTableName()) + " with " + keyValueCount + 
+            " key values of total size " + byteSize + " bytes within time range [" + minTimeStamp + "," +  maxTimeStamp + "]");
     }
     
     @SuppressWarnings("deprecation")

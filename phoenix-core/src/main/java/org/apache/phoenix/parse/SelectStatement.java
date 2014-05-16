@@ -186,8 +186,4 @@ public class SelectStatement implements FilterableStatement {
     public Action getSequenceAction() {
         return Action.RESERVE;
     }
-    
-    public boolean isJoin() {
-        return fromTable.size() > 1 || (fromTable.size() > 0 && fromTable.get(0) instanceof JoinTableNode);
-    }
 }

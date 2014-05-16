@@ -488,7 +488,7 @@ public class PhoenixDatabaseMetaData implements DatabaseMetaData, org.apache.pho
 
     @Override
     public String getIdentifierQuoteString() throws SQLException {
-        return SchemaUtil.ESCAPE_CHARACTER;
+        return "\"";
     }
 
     @Override

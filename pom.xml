@@ -30,6 +30,18 @@
     <module>phoenix-assembly</module>
   </modules>
 
+  <distributionManagement>
+    <repository>
+        <id>${repoid}</id>
+        <name>${reponame}</name>
+        <url>${repourl}</url>
+    </repository>
+    <snapshotRepository>
+      <id>snapshot-repo</id>
+      <url>https://github.com/forcedotcom/phoenix/tree/maven-artifacts/raw/master/snapshots</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <repositories>
     <repository>
       <id>apache release</id>
@@ -107,16 +119,11 @@
     <maven-eclipse-plugin.version>2.8</maven-eclipse-plugin.version>
     <maven-build-helper-plugin.version>1.7</maven-build-helper-plugin.version>
     <maven-surefire-plugin.version>2.16</maven-surefire-plugin.version>
-    <maven-failsafe-plugin.version>2.17</maven-failsafe-plugin.version>
-    
+    <maven-failsafe-plugin.version>2.12</maven-failsafe-plugin.version>
     <maven-dependency-plugin.version>2.1</maven-dependency-plugin.version>
     <maven.assembly.version>2.4</maven.assembly.version>
     <maven.rat.version>0.8</maven.rat.version>
-	
-    <!--  Plugin options -->
-    <numForkedIT>3</numForkedIT>
-    <numForkedUT>3</numForkedUT>
-    
+
     <!-- Set default encoding so multi-byte tests work correctly on the Mac -->
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -179,7 +186,6 @@
               <exclude>README.md</exclude>
               <exclude>README</exclude>
 	      <exclude>dev/phoenix.importorder</exclude>
-              <exclude>dev/release_files/**</exclude>
               <exclude>**/target/**</exclude>
               <exclude>**/resources/*.Driver</exclude>
               <exclude>**/*.versionsBackup</exclude>
@@ -243,8 +249,6 @@
           <version>${maven-failsafe-plugin.version}</version>
           <configuration>
             <encoding>UTF-8</encoding>
-            <forkCount>${numForkedIT}</forkCount>
-            <reuseForks>true</reuseForks>
             <argLine>-enableassertions -Xmx3000m -XX:MaxPermSize=128m -Djava.security.egd=file:/dev/./urandom</argLine>
             <redirectTestOutputToFile>${test.output.tofile}</redirectTestOutputToFile>
             <testSourceDirectory>${basedir}/src/it/java</testSourceDirectory>
@@ -301,8 +305,6 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
-          <forkCount>${numForkedUT}</forkCount>
-          <reuseForks>true</reuseForks>
           <argLine>-enableassertions -Xmx2250m -XX:MaxPermSize=128m 
             -Djava.security.egd=file:/dev/./urandom</argLine>
           <redirectTestOutputToFile>${test.output.tofile}</redirectTestOutputToFile>
@@ -694,6 +696,39 @@
             </plugin>
           </plugins>
         </pluginManagement>
+      </build>
+    </profile>
+    <profile>
+        <id>windows</id>
+        <modules>
+            <module>winpkg</module>
+        </modules>
+        <build>
+            <plugins>
+                <plugin>
+                <groupId>com.google.code.maven-replacer-plugin</groupId>
+                <artifactId>replacer</artifactId>
+                <version>1.5.2</version>
+                <executions>
+                    <execution>
+                    <goals>
+                        <goal>replace</goal>
+                    </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <includes>
+                        <include>winpkg/src/scripts/*</include>
+                    </includes>
+                    <replacements>
+                        <replacement>
+                            <token>@final.name@</token>
+                            <value>phoenix-${project.version}</value>
+                        </replacement>
+                    </replacements>
+                </configuration>
+              </plugin>
+          </plugins>
       </build>
     </profile>
 

@@ -44,8 +44,8 @@ public class DerivedTableNode extends TableNode {
     }
 
     @Override
-    public <T> T accept(TableNodeVisitor<T> visitor) throws SQLException {
-        return visitor.visit(this);
+    public void accept(TableNodeVisitor visitor) throws SQLException {
+        visitor.visit(this);
     }
 
 }

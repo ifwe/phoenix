@@ -36,6 +36,7 @@ import java.sql.SQLException;
 import java.util.Properties;
 
 import org.apache.hadoop.hbase.HColumnDescriptor;
+import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.client.HTableInterface;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -46,6 +47,7 @@ import org.apache.phoenix.schema.PTableKey;
 import org.apache.phoenix.schema.TableNotFoundException;
 import org.apache.phoenix.util.IndexUtil;
 import org.apache.phoenix.util.SchemaUtil;
+import org.junit.After;
 import org.junit.Test;
 
 
@@ -57,6 +59,11 @@ public class AlterTableIT extends BaseHBaseManagedTimeIT {
     public static final String DATA_TABLE_FULL_NAME = SchemaUtil.getTableName(SCHEMA_NAME, "T");
     public static final String INDEX_TABLE_FULL_NAME = SchemaUtil.getTableName(SCHEMA_NAME, "I");
 
+
+    @After
+    public void after() throws Exception {
+      deletePriorTables(HConstants.LATEST_TIMESTAMP);
+    }
 
     @Test
     public void testAlterTableWithVarBinaryKey() throws Exception {

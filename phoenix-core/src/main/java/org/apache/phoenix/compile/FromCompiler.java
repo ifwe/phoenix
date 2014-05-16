@@ -26,25 +26,19 @@ import java.util.List;
 
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.client.HTableInterface;
-import org.apache.phoenix.coprocessor.MetaDataProtocol;
 import org.apache.phoenix.coprocessor.MetaDataProtocol.MetaDataMutationResult;
 import org.apache.phoenix.jdbc.PhoenixConnection;
-import org.apache.phoenix.parse.AliasedNode;
 import org.apache.phoenix.parse.BindTableNode;
 import org.apache.phoenix.parse.ColumnDef;
 import org.apache.phoenix.parse.CreateTableStatement;
 import org.apache.phoenix.parse.DerivedTableNode;
-import org.apache.phoenix.parse.FamilyWildcardParseNode;
 import org.apache.phoenix.parse.JoinTableNode;
 import org.apache.phoenix.parse.NamedTableNode;
-import org.apache.phoenix.parse.ParseNode;
 import org.apache.phoenix.parse.SelectStatement;
 import org.apache.phoenix.parse.SingleTableStatement;
 import org.apache.phoenix.parse.TableName;
 import org.apache.phoenix.parse.TableNode;
 import org.apache.phoenix.parse.TableNodeVisitor;
-import org.apache.phoenix.parse.TableWildcardParseNode;
-import org.apache.phoenix.parse.WildcardParseNode;
 import org.apache.phoenix.query.ConnectionQueryServices;
 import org.apache.phoenix.query.QueryConstants;
 import org.apache.phoenix.schema.AmbiguousColumnException;
@@ -63,7 +57,6 @@ import org.apache.phoenix.schema.PTable;
 import org.apache.phoenix.schema.PTableImpl;
 import org.apache.phoenix.schema.PTableKey;
 import org.apache.phoenix.schema.PTableType;
-import org.apache.phoenix.schema.SortOrder;
 import org.apache.phoenix.schema.TableNotFoundException;
 import org.apache.phoenix.schema.TableRef;
 import org.apache.phoenix.util.SchemaUtil;
@@ -146,16 +139,16 @@ public class FromCompiler {
      * @return the column resolver
      * @throws SQLException
      * @throws SQLFeatureNotSupportedException
-     *             if unsupported constructs appear in the FROM clause
+     *             if unsupported constructs appear in the FROM clause. Currently only a single table name is supported.
      * @throws TableNotFoundException
      *             if table name not found in schema
      */
     public static ColumnResolver getResolverForQuery(SelectStatement statement, PhoenixConnection connection)
     		throws SQLException {
     	List<TableNode> fromNodes = statement.getFrom();
-        if (!statement.isJoin() && fromNodes.get(0) instanceof NamedTableNode)
-            return new SingleTableColumnResolver(connection, (NamedTableNode) fromNodes.get(0), true);
-        
+        if (fromNodes.size() == 1)
+            return new SingleTableColumnResolver(connection, (NamedTableNode)fromNodes.get(0), true);
+
         MultiTableColumnResolver visitor = new MultiTableColumnResolver(connection);
         for (TableNode node : fromNodes) {
             node.accept(visitor);
@@ -344,7 +337,7 @@ public class FromCompiler {
     }
     
     // TODO: unused, but should be used for joins - make private once used
-    public static class MultiTableColumnResolver extends BaseColumnResolver implements TableNodeVisitor<Void> {
+    public static class MultiTableColumnResolver extends BaseColumnResolver implements TableNodeVisitor {
         private final ListMultimap<String, TableRef> tableMap;
         private final List<TableRef> tables;
 
@@ -360,19 +353,17 @@ public class FromCompiler {
         }
 
         @Override
-        public Void visit(BindTableNode boundTableNode) throws SQLException {
+        public void visit(BindTableNode boundTableNode) throws SQLException {
             throw new SQLFeatureNotSupportedException();
         }
 
         @Override
-        public Void visit(JoinTableNode joinNode) throws SQLException {
-            joinNode.getLHS().accept(this);
-            joinNode.getRHS().accept(this);
-            return null;
+        public void visit(JoinTableNode joinNode) throws SQLException {
+            joinNode.getTable().accept(this);
         }
 
         @Override
-        public Void visit(NamedTableNode tableNode) throws SQLException {
+        public void visit(NamedTableNode tableNode) throws SQLException {
             String alias = tableNode.getAlias();
             TableRef tableRef = createTableRef(tableNode, true);
             PTable theTable = tableRef.getTable();
@@ -387,45 +378,11 @@ public class FromCompiler {
             	tableMap.put(name, tableRef);
             }
             tables.add(tableRef);
-            return null;
         }
 
         @Override
-        public Void visit(DerivedTableNode subselectNode) throws SQLException {
-            List<AliasedNode> selectNodes = subselectNode.getSelect().getSelect();
-            List<PColumn> columns = new ArrayList<PColumn>();
-            int position = 0;
-            for (AliasedNode aliasedNode : selectNodes) {
-                String alias = aliasedNode.getAlias();
-                if (alias == null) {
-                    ParseNode node = aliasedNode.getNode();
-                    if (node instanceof WildcardParseNode 
-                            || node instanceof TableWildcardParseNode
-                            || node instanceof FamilyWildcardParseNode)
-                        throw new SQLException("Encountered wildcard in subqueries.");
-                    
-                    alias = SchemaUtil.normalizeIdentifier(node.getAlias());
-                }
-                if (alias == null) {
-                    // Use position as column name for anonymous columns, which can be 
-                    // referenced by an outer wild-card select.
-                    alias = String.valueOf(position);
-                }
-                PColumnImpl column = new PColumnImpl(PNameFactory.newName(alias), 
-                        PNameFactory.newName(QueryConstants.DEFAULT_COLUMN_FAMILY), 
-                        null, 0, 0, true, position++, SortOrder.ASC, null, null, false);
-                columns.add(column);
-            }
-            PTable t = PTableImpl.makePTable(null, PName.EMPTY_NAME, PName.EMPTY_NAME, 
-                    PTableType.SUBQUERY, null, MetaDataProtocol.MIN_TABLE_TIMESTAMP, PTable.INITIAL_SEQ_NUM, 
-                    null, null, columns, null, Collections.<PTable>emptyList(), false, 
-                    Collections.<PName>emptyList(), null, null, false, false, null, null);
-            
-            String alias = subselectNode.getAlias();
-            TableRef tableRef = new TableRef(alias, t, MetaDataProtocol.MIN_TABLE_TIMESTAMP, false);
-            tableMap.put(alias, tableRef);
-            tables.add(tableRef);
-            return null;
+        public void visit(DerivedTableNode subselectNode) throws SQLException {
+            throw new SQLFeatureNotSupportedException();
         }
 
         private static class ColumnFamilyRef {

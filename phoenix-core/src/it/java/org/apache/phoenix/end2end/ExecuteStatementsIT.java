@@ -76,14 +76,17 @@ public class ExecuteStatementsIT extends BaseHBaseManagedTimeIT {
             "UPSERT INTO " + PTSDB_NAME + "(date, val, inst)\n" +
             "    SELECT date+1, val*10, host FROM " + PTSDB_NAME + ";";
         
-        Date now = new Date(System.currentTimeMillis());
+        // Compensate time clock skew if tests run in a multi-node cluster
+        Date now = new Date(isDistributedCluster() ? System.currentTimeMillis() - 1000 : 
+          System.currentTimeMillis());
         Connection conn = DriverManager.getConnection(getUrl());
         conn.setAutoCommit(true);
         List<Object> binds = Arrays.<Object>asList("a","j","s", 6);
         int nStatements = PhoenixRuntime.executeStatements(conn, new StringReader(statements), binds);
         assertEquals(7, nStatements);
 
-        Date then = new Date(System.currentTimeMillis() + QueryConstants.MILLIS_IN_DAY);
+        Date then = new Date(System.currentTimeMillis() + QueryConstants.MILLIS_IN_DAY + 
+            (isDistributedCluster() ? 1000 : 0));
         String query = "SELECT host,inst, date,val FROM " + PTSDB_NAME + " where inst is not null";
         PreparedStatement statement = conn.prepareStatement(query);
         

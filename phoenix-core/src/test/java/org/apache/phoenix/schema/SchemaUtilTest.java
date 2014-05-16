@@ -19,9 +19,10 @@ package org.apache.phoenix.schema;
 
 import static org.junit.Assert.assertEquals;
 
+import org.junit.Test;
+
 import org.apache.phoenix.exception.SQLExceptionCode;
 import org.apache.phoenix.util.SchemaUtil;
-import org.junit.Test;
 
 public class SchemaUtilTest {
 
@@ -52,12 +53,5 @@ public class SchemaUtilTest {
         assertEquals(columnDisplayName, "familyName.columnName");
         columnDisplayName = SchemaUtil.getMetaDataEntityName(null, null, null, "columnName");
         assertEquals(columnDisplayName, "columnName");
-    }
-    
-    @Test
-    public void testEscapingColumnName() {
-        assertEquals("\"ID\"", SchemaUtil.getEscapedFullColumnName("ID"));
-        assertEquals("\"0\".\"NAME\"", SchemaUtil.getEscapedFullColumnName("0.NAME"));
-        assertEquals("\"CF1\".\"LOCATION\"", SchemaUtil.getEscapedFullColumnName("CF1.LOCATION"));
     }
 }

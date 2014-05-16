@@ -145,7 +145,7 @@ public abstract class BasicQueryPlan implements QueryPlan {
             // Add one to server time since max of time range is exclusive
             // and we need to account of OSs with lower resolution clocks.
             if(scn < HConstants.LATEST_TIMESTAMP) {
-                scn++;
+                scn = scn + 1;
             }
         }
         ScanUtil.setTimeRange(scan, scn);

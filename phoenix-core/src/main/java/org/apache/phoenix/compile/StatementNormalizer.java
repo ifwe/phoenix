@@ -18,7 +18,7 @@
 package org.apache.phoenix.compile;
 
 import java.sql.SQLException;
-import java.util.Collections;
+import java.sql.SQLFeatureNotSupportedException;
 import java.util.List;
 
 import com.google.common.collect.Lists;
@@ -74,7 +74,8 @@ public class StatementNormalizer extends ParseNodeRewriter {
      * @throws SQLException 
      */
     public static SelectStatement normalize(SelectStatement statement, ColumnResolver resolver) throws SQLException {
-        boolean multiTable = statement.isJoin();
+        List<TableNode> from = statement.getFrom();
+        boolean multiTable = from.size() > 1;
         // Replace WildcardParse with a list of TableWildcardParseNode for multi-table queries
         if (multiTable) {
             List<AliasedNode> selectNodes = statement.getSelect();
@@ -86,13 +87,11 @@ public class StatementNormalizer extends ParseNodeRewriter {
                     if (selectNodes == normSelectNodes) {
                         normSelectNodes = Lists.newArrayList(selectNodes.subList(0, i));
                     }
-                    for (TableNode tNode : statement.getFrom()) {
+                    for (TableNode tNode : from) {
                         TableNameVisitor visitor = new TableNameVisitor();
-                        List<TableName> tableNames = tNode.accept(visitor);
-                        for (TableName tableName : tableNames) {
-                            TableWildcardParseNode node = NODE_FACTORY.tableWildcard(tableName);
-                            normSelectNodes.add(NODE_FACTORY.aliasedNode(null, node));
-                        }
+                        tNode.accept(visitor);
+                        TableWildcardParseNode node = NODE_FACTORY.tableWildcard(visitor.getTableName());
+                        normSelectNodes.add(NODE_FACTORY.aliasedNode(null, node));
                     }
                 } else if (selectNodes != normSelectNodes) {
                     normSelectNodes.add(aliasedNode);
@@ -108,36 +107,33 @@ public class StatementNormalizer extends ParseNodeRewriter {
         return rewrite(statement, new StatementNormalizer(resolver, statement.getSelect().size(), multiTable));
     }
 
-    private static class TableNameVisitor implements TableNodeVisitor<List<TableName>> {
-
-        @Override
-        public List<TableName> visit(BindTableNode boundTableNode) throws SQLException {
-            TableName name = boundTableNode.getAlias() == null ? boundTableNode.getName() : TableName.create(null, boundTableNode.getAlias());
-            return Collections.singletonList(name);
+    private static class TableNameVisitor implements TableNodeVisitor {
+        private TableName tableName;
+        
+        public TableName getTableName() {
+            return tableName;
         }
 
         @Override
-        public List<TableName> visit(JoinTableNode joinNode) throws SQLException {
-            List<TableName> lhs = joinNode.getLHS().accept(this);
-            List<TableName> rhs = joinNode.getRHS().accept(this);
-            List<TableName> ret = Lists.<TableName>newArrayListWithExpectedSize(lhs.size() + rhs.size());
-            ret.addAll(lhs);
-            ret.addAll(rhs);
-            return ret;
+        public void visit(BindTableNode boundTableNode) throws SQLException {
+            tableName = boundTableNode.getAlias() == null ? boundTableNode.getName() : TableName.create(null, boundTableNode.getAlias());
         }
 
         @Override
-        public List<TableName> visit(NamedTableNode namedTableNode)
+        public void visit(JoinTableNode joinNode) throws SQLException {
+            joinNode.getTable().accept(this);
+        }
+
+        @Override
+        public void visit(NamedTableNode namedTableNode)
                 throws SQLException {
-            TableName name = namedTableNode.getAlias() == null ? namedTableNode.getName() : TableName.create(null, namedTableNode.getAlias());
-            return Collections.singletonList(name);
+            tableName = namedTableNode.getAlias() == null ? namedTableNode.getName() : TableName.create(null, namedTableNode.getAlias());
         }
 
         @Override
-        public List<TableName> visit(DerivedTableNode subselectNode)
+        public void visit(DerivedTableNode subselectNode)
                 throws SQLException {
-            TableName name = TableName.create(null, subselectNode.getAlias());
-            return Collections.singletonList(name);
+            throw new SQLFeatureNotSupportedException();
         }
     };
     

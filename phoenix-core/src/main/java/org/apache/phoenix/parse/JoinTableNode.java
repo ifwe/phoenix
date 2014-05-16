@@ -32,37 +32,32 @@ public class JoinTableNode extends TableNode {
     public enum JoinType {Inner, Left, Right, Full};
     
     private final JoinType type;
-    private final TableNode lhs;
-    private final TableNode rhs;
-    private final ParseNode onNode;
+    private final ParseNode on;
+    private final TableNode table;
     
-    JoinTableNode(JoinType type, TableNode lhs, TableNode rhs, ParseNode onNode) {
-        super(null);
+    JoinTableNode(JoinType type, ParseNode on, TableNode table) {
+        super(table.getAlias());
         this.type = type;
-        this.lhs = lhs;
-        this.rhs = rhs;
-        this.onNode = onNode;
+        this.on = on;
+        this.table = table;
     }
-    
+
     public JoinType getType() {
         return type;
     }
-    
-    public TableNode getLHS() {
-        return lhs;
-    }
-    
-    public TableNode getRHS() {
-        return rhs;
-    }
-    
+
     public ParseNode getOnNode() {
-        return onNode;
+        return on;
+    }
+    
+    public TableNode getTable() {
+        return table;
     }
 
     @Override
-    public <T> T accept(TableNodeVisitor<T> visitor) throws SQLException {
-        return visitor.visit(this);
+    public void accept(TableNodeVisitor visitor) throws SQLException {
+        visitor.visit(this);
     }
+
 }
 

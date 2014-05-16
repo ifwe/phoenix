@@ -24,7 +24,14 @@ import subprocess
 import sys
 import phoenix_utils
 
-phoenix_utils.setPath()
+current_dir = os.path.dirname(os.path.abspath(__file__))
+phoenix_jar_path = os.getenv('PHOENIX_LIB_DIR',
+                             os.path.join(current_dir, "..", "phoenix-assembly",
+                                "target"))
+phoenix_client_jar = phoenix_utils.find("phoenix-*-client.jar", phoenix_jar_path)
+
+if phoenix_client_jar == "":
+    phoenix_client_jar = phoenix_utils.find("phoenix-*-client.jar", os.path.join(current_dir, ".."))
 
 if len(sys.argv) < 2:
     print "Zookeeper not specified. \nUsage: sqlline.py <zookeeper> \
@@ -42,9 +49,9 @@ colorSetting = "true"
 if os.name == 'nt':
     colorSetting = "false"
 
-java_cmd = 'java -cp ".' + os.pathsep + phoenix_utils.phoenix_client_jar + \
+java_cmd = 'java -cp ".' + os.pathsep + phoenix_client_jar + \
     '" -Dlog4j.configuration=file:' + \
-    os.path.join(phoenix_utils.current_dir, "log4j.properties") + \
+    os.path.join(current_dir, "log4j.properties") + \
     " sqlline.SqlLine -d org.apache.phoenix.jdbc.PhoenixDriver \
 -u jdbc:phoenix:" + sys.argv[1] + \
     " -n none -p none --color=" + colorSetting + " --fastConnect=false --verbose=true \

@@ -70,18 +70,24 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.IntegrationTestingUtility;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.log4j.Logger;
 import org.apache.phoenix.jdbc.PhoenixDatabaseMetaData;
+import org.apache.phoenix.jdbc.PhoenixTestDriver;
 import org.apache.phoenix.query.BaseTest;
+import org.apache.phoenix.query.ConnectionQueryServicesImpl;
 import org.apache.phoenix.query.HBaseFactoryProvider;
 import org.apache.phoenix.schema.NewerTableAlreadyExistsException;
 import org.apache.phoenix.schema.PTableType;
+import org.apache.phoenix.schema.SequenceNotFoundException;
 import org.apache.phoenix.schema.TableNotFoundException;
 import org.apache.phoenix.util.PhoenixRuntime;
 import org.apache.phoenix.util.SchemaUtil;
+import org.apache.phoenix.util.StringUtil;
 import org.apache.phoenix.util.TestUtil;
 import org.junit.BeforeClass;
 import org.slf4j.LoggerFactory;
@@ -95,6 +101,7 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class BaseConnectedQueryIT extends BaseTest {
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(BaseConnectedQueryIT.class);
+    private static Boolean isDistributedCluster = null;
     
     protected static byte[][] getDefaultSplits(String tenantId) {
         return new byte[][] { 
@@ -104,18 +111,25 @@ public abstract class BaseConnectedQueryIT extends BaseTest {
             };
     }
     
+    protected synchronized static boolean isDistributedCluster() {
+        if (isDistributedCluster != null) {
+            return isDistributedCluster;
+        }
+        Configuration conf = HBaseFactoryProvider.getConfigurationFactory().getConfiguration();
+        isDistributedCluster = Boolean.parseBoolean(System.getProperty(
+            IntegrationTestingUtility.IS_DISTRIBUTED_CLUSTER, "false"));
+        if (!isDistributedCluster) {
+            isDistributedCluster = conf.getBoolean(IntegrationTestingUtility.IS_DISTRIBUTED_CLUSTER,
+                false);
+        }
+        logger.info("Tests are running in " + ((isDistributedCluster) ? "Distributed Cluster Mode" :
+            "MiniHBaseCluster Mode"));
+        return isDistributedCluster;
+    }
+    
     protected static String getUrl() {
-      Configuration conf = HBaseFactoryProvider.getConfigurationFactory().getConfiguration();
-      boolean isDistributedCluster = false;
-      isDistributedCluster =
-          Boolean.parseBoolean(System.getProperty(IntegrationTestingUtility.IS_DISTRIBUTED_CLUSTER,
-            "false"));
-      if (!isDistributedCluster) {
-        isDistributedCluster =
-            conf.getBoolean(IntegrationTestingUtility.IS_DISTRIBUTED_CLUSTER, false);
-      }
       // reconstruct url when running against a live cluster
-      if (isDistributedCluster) {
+      if (isDistributedCluster()) {
         // Get all info from hbase-site.xml
         return JDBC_PROTOCOL + JDBC_PROTOCOL_TERMINATOR + PHOENIX_TEST_DRIVER_URL_PARAM;      
       } else {
@@ -137,10 +151,17 @@ public abstract class BaseConnectedQueryIT extends BaseTest {
         if (ts != HConstants.LATEST_TIMESTAMP) {
             props.setProperty(CURRENT_SCN_ATTRIB, Long.toString(ts));
         }
-        Connection conn = DriverManager.getConnection(getUrl(), props);
+        String url = getUrl();
+        PhoenixTestDriver driver = (PhoenixTestDriver) DriverManager.getDriver(url);
+        ConnectionQueryServicesImpl connQueryService=
+            (ConnectionQueryServicesImpl) driver.getConnectionQueryServices(url, props);
+        connQueryService.clearCache();
+        Connection conn = DriverManager.getConnection(url, props);
         try {
             deletePriorTables(ts, conn);
             deletePriorSequences(ts, conn);
+        } catch (SequenceNotFoundException e) {
+            //ignore when there is no sequence to be deleted
         }
         finally {
             conn.close();
@@ -251,6 +272,10 @@ public abstract class BaseConnectedQueryIT extends BaseTest {
         } finally {
             conn.close();
         }
+        // compensate time clock skew when running tests in a multi-node cluster
+        if(isDistributedCluster()) {
+            Thread.sleep(1000);
+        }
     }
     
     protected static void initATableValues(String tenantId, byte[][] splits) throws Exception {
@@ -336,6 +361,11 @@ public abstract class BaseConnectedQueryIT extends BaseTest {
              conn.commit();
          } finally {
              conn.close();
+         }
+         
+         // compensate time clock skew when running tests in a multi-node cluster
+         if(isDistributedCluster()) {
+             Thread.sleep(1000);
          }
     }
     
@@ -543,6 +573,10 @@ public abstract class BaseConnectedQueryIT extends BaseTest {
         } finally {
             conn.close();
         }
+        // compensate time clock skew when running tests in a multi-node cluster
+        if(isDistributedCluster()) {
+            Thread.sleep(1000);
+        }
     }
     protected static void initEntityHistoryTableValues(String tenantId, byte[][] splits) throws Exception {
         initEntityHistoryTableValues(tenantId, splits, null);
@@ -654,6 +688,11 @@ public abstract class BaseConnectedQueryIT extends BaseTest {
         } finally {
             conn.close();
         }
+        
+        // compensate time clock skew when running tests in a multi-node cluster
+        if(isDistributedCluster()) {
+            Thread.sleep(1000);
+        }
     }
     
     protected static void initSaltedEntityHistoryTableValues(String tenantId, byte[][] splits, Date date, Long ts) throws Exception {
@@ -757,6 +796,10 @@ public abstract class BaseConnectedQueryIT extends BaseTest {
             conn.commit();
         } finally {
             conn.close();
+        }
+        // compensate time clock skew when running tests in a multi-node cluster
+        if(isDistributedCluster()) {
+            Thread.sleep(1000);
         }
     }
 

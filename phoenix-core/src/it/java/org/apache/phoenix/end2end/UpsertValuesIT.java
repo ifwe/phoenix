@@ -66,7 +66,7 @@ public class UpsertValuesIT extends BaseClientManagedTimeIT {
 
         props.setProperty(PhoenixRuntime.CURRENT_SCN_ATTRIB, Long.toString(ts + 20));
         conn = DriverManager.getConnection(getUrl(), props);
-        ResultSet rs = conn.createStatement().executeQuery("select count(1) from " + TestUtil.PTSDB_NAME + " group by inst limit 1");
+        ResultSet rs = conn.createStatement().executeQuery("select count(1) from " + TestUtil.PTSDB_NAME + " where inst ='a' group by inst limit 1");
         assertTrue(rs.next());
         assertEquals(3,rs.getInt(1));
         assertFalse(rs.next());
@@ -104,7 +104,10 @@ public class UpsertValuesIT extends BaseClientManagedTimeIT {
         Date date = DateUtil.parseDate(dateString);
         assertEquals(date,rs.getDate(1));
         assertTrue(rs.next());
-        assertTrue(rs.getDate(1).after(now) && rs.getDate(1).before(then));
+        // 2000 below is to compensate clock skew from different servers when running against a live
+        // cluster
+        assertTrue(rs.getDate(1).after(new Date(now.getTime() - 2000)) && 
+          rs.getDate(1).before(new Date(then.getTime() + 2000)));
         assertFalse(rs.next());
     }
     
