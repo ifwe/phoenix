@@ -25,7 +25,7 @@
   <parent>
     <groupId>org.apache.phoenix</groupId>
     <artifactId>phoenix</artifactId>
-    <version>4.0.0-incubating</version>
+    <version>4.0.0.2.1.2.0-tagged-etl</version>
   </parent>
   <artifactId>phoenix-hadoop1-compat</artifactId>
   <name>Phoenix Hadoop1 Compatibility</name>

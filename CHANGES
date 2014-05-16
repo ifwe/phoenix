@@ -1,3 +1,9 @@
+Notes - Phoenix - Version 4.0-tagged-etl
+
+    The changes here are specific to tagged's etl of messaging data.
+    * Bulk loader uses MYSQL tsv file format
+    * Imported dates will accept the milliseconds portion of the date string
+    * The hbase version timestamp can be set during bulk loading
 
 Release Notes - Phoenix - Version 4.0.0-incubating
 
