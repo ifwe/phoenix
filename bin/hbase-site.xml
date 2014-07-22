@@ -26,4 +26,8 @@
     <name>hbase.regionserver.wal.codec</name>
     <value>org.apache.hadoop.hbase.regionserver.wal.IndexedWALEditCodec</value>
   </property>
+  <property>
+    <name>phoenix.query.dateFormat</name>
+    <value>yyyy-MM-dd HH:mm:ss.SSS</value>
+  </property>
 </configuration>
