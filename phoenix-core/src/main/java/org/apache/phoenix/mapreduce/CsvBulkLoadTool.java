@@ -220,17 +220,19 @@ public class CsvBulkLoadTool extends Configured implements Tool {
             return 1;
         }
 
-        LOG.info("Loading HFiles from {}", outputPath);
-        LoadIncrementalHFiles loader = new LoadIncrementalHFiles(getConf());
-        loader.doBulkLoad(outputPath, htable);
-        htable.close();
+        LOG.info("Export complete, import using `hbase org.apache.hadoop.hbase.mapreduce.LoadIncrementalHFiles {} <tablename>`", outputPath);
 
-        LOG.info("Incremental load complete");
-
-        LOG.info("Removing output directory {}", outputPath);
-        if (!FileSystem.get(getConf()).delete(outputPath, true)) {
-            LOG.error("Removing output directory {} failed", outputPath);
-        }
+//        LOG.info("Loading HFiles from {}", outputPath);
+//        LoadIncrementalHFiles loader = new LoadIncrementalHFiles(getConf());
+//        loader.doBulkLoad(outputPath, htable);
+//        htable.close();
+//
+//        LOG.info("Incremental load complete");
+//
+//        LOG.info("Removing output directory {}", outputPath);
+//        if (!FileSystem.get(getConf()).delete(outputPath, true)) {
+//            LOG.error("Removing output directory {} failed", outputPath);
+//        }
 
         return 0;
     }
