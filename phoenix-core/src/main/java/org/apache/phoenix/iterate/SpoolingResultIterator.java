@@ -95,6 +95,13 @@ public class SpoolingResultIterator implements PeekingResultIterator {
         try {
             // Can't be bigger than int, since it's the max of the above allocation
             int size = (int)chunk.getSize();
+            DeferredFileOutputStream spoolTo = new DeferredFileOutputStream(size, "ResultSpooler", ".bin", null) {
+                @Override
+                protected void thresholdReached() throws IOException {
+                    super.thresholdReached();
+                    chunk.close();
+                }
+            };
             DataOutputStream out = new DataOutputStream(spoolTo);
             final long maxBytesAllowed = maxSpoolToDisk == -1 ? 
             		Long.MAX_VALUE : thresholdBytes + maxSpoolToDisk;
