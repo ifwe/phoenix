@@ -84,22 +84,17 @@ public class SpoolingResultIterator implements PeekingResultIterator {
     *  the memory manager) is exceeded.
     * @throws SQLException
     */
+    
+    /**
+     * Edit: eliminate the use of temp files, aka don't spool to disk once a threshold has been reached. We don't
+     * really need this feature and it was causing issues when the temp files didn't get cleaned up.
+     */
     SpoolingResultIterator(ResultIterator scanner, MemoryManager mm, final int thresholdBytes, final long maxSpoolToDisk) throws SQLException {
         boolean success = false;
-        boolean usedOnDiskIterator = false;
         final MemoryChunk chunk = mm.allocate(0, thresholdBytes);
-        File tempFile = null;
         try {
             // Can't be bigger than int, since it's the max of the above allocation
             int size = (int)chunk.getSize();
-            tempFile = File.createTempFile("ResultSpooler",".bin");
-            DeferredFileOutputStream spoolTo = new DeferredFileOutputStream(size, tempFile) {
-                @Override
-                protected void thresholdReached() throws IOException {
-                    super.thresholdReached();
-                    chunk.close();
-                }
-            };
             DataOutputStream out = new DataOutputStream(spoolTo);
             final long maxBytesAllowed = maxSpoolToDisk == -1 ? 
             		Long.MAX_VALUE : thresholdBytes + maxSpoolToDisk;
@@ -120,7 +115,6 @@ public class SpoolingResultIterator implements PeekingResultIterator {
                 spoolFrom = new InMemoryResultIterator(data, chunk);
             } else {
                 spoolFrom = new OnDiskResultIterator(maxSize, spoolTo.getFile());
-                usedOnDiskIterator = true;
             }
             success = true;
         } catch (IOException e) {
@@ -129,14 +123,8 @@ public class SpoolingResultIterator implements PeekingResultIterator {
             try {
                 scanner.close();
             } finally {
-                try {
-                    if (!usedOnDiskIterator) {
-                        tempFile.delete();
-                    }
-                } finally {
-                    if (!success) {
-                        chunk.close();
-                    }
+                if (!success) {
+                    chunk.close();
                 }
             }
         }
