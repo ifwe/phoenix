@@ -93,7 +93,7 @@ public class SpoolingResultIterator implements PeekingResultIterator {
         try {
             // Can't be bigger than int, since it's the max of the above allocation
             int size = (int)chunk.getSize();
-            PrintWriter sizeInfo = new PrintWriter("ThresholdSize.txt", true);
+            PrintWriter sizeInfo = new PrintWriter("ThresholdSize.txt");
             sizeInfo.println(size);
             sizeInfo.close();
             DeferredFileOutputStream spoolTo = new DeferredFileOutputStream(size, "ResultSpooler", ".bin", null) {
