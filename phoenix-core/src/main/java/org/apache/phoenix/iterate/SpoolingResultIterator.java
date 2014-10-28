@@ -38,7 +38,7 @@ import org.apache.phoenix.memory.MemoryManager.MemoryChunk;
 import org.apache.phoenix.query.QueryServices;
 import org.apache.phoenix.query.QueryServicesOptions;
 import org.apache.phoenix.schema.tuple.ResultTuple;
-import org.apache.phoenix.schema.tuple.Tuple;///
+import org.apache.phoenix.schema.tuple.Tuple;
 import org.apache.phoenix.util.ByteUtil;
 import org.apache.phoenix.util.ResultUtil;
 import org.apache.phoenix.util.ServerUtil;
