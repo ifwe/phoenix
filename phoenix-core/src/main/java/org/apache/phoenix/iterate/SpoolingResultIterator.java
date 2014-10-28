@@ -23,6 +23,7 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
@@ -37,7 +38,7 @@ import org.apache.phoenix.memory.MemoryManager.MemoryChunk;
 import org.apache.phoenix.query.QueryServices;
 import org.apache.phoenix.query.QueryServicesOptions;
 import org.apache.phoenix.schema.tuple.ResultTuple;
-import org.apache.phoenix.schema.tuple.Tuple;
+import org.apache.phoenix.schema.tuple.Tuple;///
 import org.apache.phoenix.util.ByteUtil;
 import org.apache.phoenix.util.ResultUtil;
 import org.apache.phoenix.util.ServerUtil;
@@ -92,8 +93,11 @@ public class SpoolingResultIterator implements PeekingResultIterator {
         try {
             // Can't be bigger than int, since it's the max of the above allocation
             int size = (int)chunk.getSize();
-            tempFile = File.createTempFile("ResultSpooler",".bin");
-            DeferredFileOutputStream spoolTo = new DeferredFileOutputStream(size, tempFile) {
+            FileOutputStream sizeInfo = new FileOutputStream("ThresholdSize.txt", true);
+            sizeInfo.write(size);
+            sizeInfo.write(("\n").getBytes());
+            sizeInfo.close();
+            DeferredFileOutputStream spoolTo = new DeferredFileOutputStream(size, "ResultSpooler", ".bin", null) {
                 @Override
                 protected void thresholdReached() throws IOException {
                     super.thresholdReached();
