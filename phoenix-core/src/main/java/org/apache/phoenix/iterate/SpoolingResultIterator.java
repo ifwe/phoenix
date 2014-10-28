@@ -23,7 +23,7 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.PrintWriter;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
@@ -93,9 +93,8 @@ public class SpoolingResultIterator implements PeekingResultIterator {
         try {
             // Can't be bigger than int, since it's the max of the above allocation
             int size = (int)chunk.getSize();
-            FileOutputStream sizeInfo = new FileOutputStream("ThresholdSize.txt", true);
-            sizeInfo.write(size);
-            sizeInfo.write(("\n").getBytes());
+            PrintWriter sizeInfo = new PrintWriter("ThresholdSize.txt", true);
+            sizeInfo.println(size);
             sizeInfo.close();
             DeferredFileOutputStream spoolTo = new DeferredFileOutputStream(size, "ResultSpooler", ".bin", null) {
                 @Override
