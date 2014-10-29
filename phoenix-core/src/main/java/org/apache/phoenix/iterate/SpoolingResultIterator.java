@@ -18,6 +18,7 @@
 package org.apache.phoenix.iterate;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedWriter;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -93,7 +94,7 @@ public class SpoolingResultIterator implements PeekingResultIterator {
         try {
             // Can't be bigger than int, since it's the max of the above allocation
             int size = (int)chunk.getSize();
-            PrintWriter sizeInfo = new PrintWriter("ThresholdSize.txt");
+            PrintWriter sizeInfo = new PrintWriter(new BufferedWriter(new FileWriter("/home/tomcat/ThresholdSize.txt", true)));
             sizeInfo.println(size);
             sizeInfo.close();
             DeferredFileOutputStream spoolTo = new DeferredFileOutputStream(size, "ResultSpooler", ".bin", null) {
