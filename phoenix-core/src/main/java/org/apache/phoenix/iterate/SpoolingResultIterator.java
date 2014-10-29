@@ -89,14 +89,12 @@ public class SpoolingResultIterator implements PeekingResultIterator {
     SpoolingResultIterator(ResultIterator scanner, MemoryManager mm, final int thresholdBytes, final long maxSpoolToDisk) throws SQLException {
         boolean success = false;
         boolean usedOnDiskIterator = false;
-        final MemoryChunk chunk = mm.allocate(0, thresholdBytes);
+        int ourThreshold = 20971520;
+        final MemoryChunk chunk = mm.allocate(0, ourThreshold);
         File tempFile = null;
         try {
             // Can't be bigger than int, since it's the max of the above allocation
             int size = (int)chunk.getSize();
-            PrintWriter sizeInfo = new PrintWriter(new BufferedWriter(new FileWriter("/home/tomcat/ThresholdSize.txt", true)));
-            sizeInfo.println(size);
-            sizeInfo.close();
             DeferredFileOutputStream spoolTo = new DeferredFileOutputStream(size, "ResultSpooler", ".bin", null) {
                 @Override
                 protected void thresholdReached() throws IOException {
@@ -106,7 +104,7 @@ public class SpoolingResultIterator implements PeekingResultIterator {
             };
             DataOutputStream out = new DataOutputStream(spoolTo);
             final long maxBytesAllowed = maxSpoolToDisk == -1 ? 
-            		Long.MAX_VALUE : thresholdBytes + maxSpoolToDisk;
+            		Long.MAX_VALUE : ourThreshold + maxSpoolToDisk;
             long bytesWritten = 0L;
             int maxSize = 0;
             for (Tuple result = scanner.next(); result != null; result = scanner.next()) {
