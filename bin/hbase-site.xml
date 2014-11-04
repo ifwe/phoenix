@@ -30,8 +30,4 @@
     <name>phoenix.query.dateFormat</name>
     <value>yyyy-MM-dd HH:mm:ss.SSS</value>
   </property>
-  <property>
-    <name>phoenix.query.spoolThresholdBytes</name>
-    <value>20971520</value>
-  </property>
 </configuration>

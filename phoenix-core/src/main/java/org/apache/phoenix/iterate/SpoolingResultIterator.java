@@ -18,13 +18,11 @@
 package org.apache.phoenix.iterate;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedWriter;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.PrintWriter;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
@@ -88,14 +86,12 @@ public class SpoolingResultIterator implements PeekingResultIterator {
     */
     SpoolingResultIterator(ResultIterator scanner, MemoryManager mm, final int thresholdBytes, final long maxSpoolToDisk) throws SQLException {
         boolean success = false;
-        boolean usedOnDiskIterator = false;
-        int ourThreshold = 20971520;
-        final MemoryChunk chunk = mm.allocate(0, ourThreshold);
-        File tempFile = null;
+        final MemoryChunk chunk = mm.allocate(0, thresholdBytes);
+        DeferredFileOutputStream spoolTo = null;
         try {
             // Can't be bigger than int, since it's the max of the above allocation
             int size = (int)chunk.getSize();
-            DeferredFileOutputStream spoolTo = new DeferredFileOutputStream(size, "ResultSpooler", ".bin", null) {
+            spoolTo = new DeferredFileOutputStream(size, "ResultSpooler", ".bin", new File(spoolDirectory)) {
                 @Override
                 protected void thresholdReached() throws IOException {
                     super.thresholdReached();
@@ -104,7 +100,7 @@ public class SpoolingResultIterator implements PeekingResultIterator {
             };
             DataOutputStream out = new DataOutputStream(spoolTo);
             final long maxBytesAllowed = maxSpoolToDisk == -1 ? 
-            		Long.MAX_VALUE : ourThreshold + maxSpoolToDisk;
+            		Long.MAX_VALUE : thresholdBytes + maxSpoolToDisk;
             long bytesWritten = 0L;
             int maxSize = 0;
             for (Tuple result = scanner.next(); result != null; result = scanner.next()) {
@@ -115,14 +111,12 @@ public class SpoolingResultIterator implements PeekingResultIterator {
                 }
                 maxSize = Math.max(length, maxSize);
             }
-            spoolTo.close();
             if (spoolTo.isInMemory()) {
                 byte[] data = spoolTo.getData();
                 chunk.resize(data.length);
                 spoolFrom = new InMemoryResultIterator(data, chunk);
             } else {
                 spoolFrom = new OnDiskResultIterator(maxSize, spoolTo.getFile());
-                usedOnDiskIterator = true;
             }
             success = true;
         } catch (IOException e) {
@@ -132,9 +126,14 @@ public class SpoolingResultIterator implements PeekingResultIterator {
                 scanner.close();
             } finally {
                 try {
-                    if (!usedOnDiskIterator) {
-                        tempFile.delete();
+                    if(spoolTo != null) {
+                        if(!success && spoolTo.getFile() != null) {
+                            spoolTo.getFile().delete();
+                        }
+                        spoolTo.close();
                     }
+                } catch (IOException ignored) {
+                    // ignore close error
                 } finally {
                     if (!success) {
                         chunk.close();
